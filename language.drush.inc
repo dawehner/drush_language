@@ -2,7 +2,7 @@
 
 /**
  * Implementation of hook_drush_command().
- * 
+ *
  * @See drush_parse_command() for a list of recognized keys.
  *
  * @return
@@ -40,7 +40,7 @@ function drush_language_add() {
 
   $args = func_get_args();
   if (count($args) == 0) {
-    drush_set_error(dt('Could not add language. Please provide one or more language codes as arguments.'));
+    drush_set_error(dt('Please provide one or more language codes as arguments.'));
     return;
   }
 
@@ -58,7 +58,6 @@ function drush_language_add() {
       else {
         // Add the language definition
         locale_add_language($langcode);
-
         // See if we have language files to import for the newly added
         // language, collect and import them.
         if ($batch = locale_batch_by_language($langcode, '_locale_batch_language_finished')) {
@@ -77,93 +76,93 @@ function drush_language_add() {
 }
 
 /**
- * Enable a language 
- * 
+ * Enable a language
  */
 function drush_language_enable() {
   $args = func_get_args();
-  if ($args[0]) {
-    $langcode = $args[0];
+  if (count($args) == 0) {
+    drush_set_error(dt('Please provide one or more language codes as arguments.'));
+    return;
+  }
+
+  foreach ($args as $langcode) {
     $languages = language_list();
     if (array_key_exists($langcode, $languages)) {
       if (!$languages[$langcode]->enabled) {
-        // disable the default english 
+        // disable the default english
         db_update('languages')
           ->condition('language', $langcode)
           ->fields(array(
             'enabled' => 1,
           ))
           ->execute();
-          
+
         // Changing the language settings impacts the interface.
         cache_clear_all('*', 'cache_page', TRUE);
-        drush_print(dt("Enabled language : !language ", array('!language' => $langcode)));
+        drush_log(dt("Enabled language : !language ", array('!language' => $langcode)), 'ok');
       }
       else {
-         drush_print(dt("Language already enabled: !language ", array('!language' => $langcode)));
+        drush_log(dt("Language already enabled: !language ", array('!language' => $langcode)), 'warning');
       }
     }
     else {
-      drush_print(dt("Specified language does not exist !language", array('!language' => $langcode)));
+      drush_log(dt("Specified language does not exist !language", array('!language' => $langcode)), 'warning');
     }
   }
-  else {
-    drush_print(dt("Language code required"));
-  } 
 }
+
 /**
  * Disables a language
- * 
  */
 function drush_language_disable() {
   $args = func_get_args();
-  if ($args[0]) {
-    $langcode = $args[0];
+  if (count($args) == 0) {
+    drush_set_error(dt('Please provide one or more language codes as arguments.'));
+    return;
+  }
+
+  foreach ($args as $langcode) {
     $languages = language_list();
     if (array_key_exists($langcode, $languages)) {
       if ($languages[$langcode]->enabled) {
-        // disable the default english 
+        // disable the default english
         db_update('languages')
           ->condition('language', $langcode)
           ->fields(array(
             'enabled' => 0,
           ))
           ->execute();
-          
+
         // Changing the language settings impacts the interface.
         cache_clear_all('*', 'cache_page', TRUE);
-        drush_print(dt("Disabled language : !language ", array('!language' => $langcode)));
+        drush_log(dt("Disabled language : !language ", array('!language' => $langcode)), 'ok');
       }
       else {
-         drush_print(dt("Language already disabled: !language ", array('!language' => $langcode)));
+        drush_print(dt("Language already disabled: !language ", array('!language' => $langcode)), 'warning');
       }
     }
   }
-  else {
-    drush_print(dt("Language code required"));
-  } 
 }
 
 /**
  * Assigns the default language
- * 
  */
 function drush_language_default() {
   $args = func_get_args();
-  if ($args[0]) {
-    $langcode = $args[0];
+  if (count($args) == 0) {
+    drush_set_error(dt('Please provide one or more language codes as arguments.'));
+    return;
+  }
+
+  foreach ($args as $langcode) {
     // get all the languages
     $languages = language_list();
     if (array_key_exists($langcode, $languages)) {
       variable_set('language_default', (object) $languages[$langcode]);
-      drush_print(dt("!language assigned as default", array('!language' => $langcode)));
+      drush_log(dt("!language assigned as default", array('!language' => $langcode)), 'ok');
     }
     else {
-       drush_print(dt("Specified language does not exist !language", array('!language' => $langcode)));
+      drush_log(dt("Specified language does not exist !language", array('!language' => $langcode)), 'warning');
     }
   }
-  else {
-    drush_print(dt("Language code required"));
-  }
 }
-  
