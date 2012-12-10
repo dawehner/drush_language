@@ -47,7 +47,7 @@ function language_drush_command() {
     'examples' => array(
       'Import multiple files' => 'drush langimp eo file1.po file2.po ...',
       'Import with replacement' => 'drush langimp eo file.po --replace',
-      'Import with custom group' => 'drush langimp eo file.po --group mygroup',
+      'Import with custom group' => 'drush langimp eo file.po --group=mygroup',
     ),
     'options' => array(
       'replace' => array(
@@ -207,8 +207,8 @@ function drush_language_default() {
  */
 function drush_language_import() {
   $args = func_get_args();
-  if (count($args) != 2) {
-    drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--replace]'));
+  if (count($args) < 2) {
+    drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--replace] [--group=group]'));
     return;
   }
 
@@ -218,6 +218,10 @@ function drush_language_import() {
   $replace_arg = drush_get_option('replace');
   $mode = isset($replace_arg) ? LOCALE_IMPORT_OVERWRITE : LOCALE_IMPORT_KEEP;
   $group = drush_get_option('group', 'default');
+  if($group === TRUE) {
+    drush_set_error(dt('drush language-import --group option expects a string value'));
+    return;
+  }
 
   // Add language, if not yet supported
   drupal_static_reset('language_list');
@@ -232,8 +236,13 @@ function drush_language_import() {
 
   // Import language files
   foreach ($file_paths as $file_path) {
+    // probably not an absolute path
+    // test from the original $cwd
+    if (!file_exists($file_path)) {
+      $file_path = drush_cwd() . '/' . $file_path;
+    }
 
-    // Ensure we have the file uploaded
+    // Ensure we have the file intended for upload
     if (file_exists($file_path)) {
 
       // Construct fake file object
