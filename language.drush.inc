@@ -61,6 +61,24 @@ function language_drush_command() {
     ),
     'aliases' => array('langimp'),
   );
+  $items['language-export'] = array(
+    'description' => "Export string of a language as a .po file",
+    'arguments'   => array(
+      'langcode'    => dt('The langcode of the language to exported.'),
+      '.po file'    => dt('Path to a .po file. Use "-" or /dev/stdin to use standard output.'),
+    ),
+    'examples' => array(
+      'Export the french translation of the translatable menu items' => 'drush langexp --group=menu fr menu.fr.po',
+    ),
+    'options' => array(
+      'group' => array(
+        'description' => dt('The text-group to export, defaults to \'default\'.' . "\n" .
+			    'According to enabled modules this could be "blocks", "menu", "taxonomy", "countries", ...'),
+        'value' => 'optional'
+      ),
+    ),
+    'aliases' => array('langexp'),
+  );
   return $items;
 }
 
@@ -264,4 +282,52 @@ function drush_language_import() {
       drush_log(dt('File to import at !filepath not found.', $variables), 'error');
     }
   }
+}
+
+/**
+ * Export a .po file
+ */
+function drush_language_export() {
+  $args = func_get_args();
+  if (count($args) < 2) {
+    drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--group=group]'));
+    return;
+  }
+
+  // Get arguments and options
+  $langcode = array_shift($args);
+  $file_path_arg = array_shift($args);
+  $group = drush_get_option('group', 'default');
+  if($group === TRUE) {
+    drush_set_error(dt('drush language-import --group option expects a string value'));
+    return;
+  }
+
+  // Ensure the langcode match an existing language
+  drupal_static_reset('language_list');
+  $languages = language_list('language');
+  if (!isset($languages[$langcode])) {
+    drush_set_error(dt('drush language-export: no such language'));
+    return;
+  }
+  $language = $languages[$langcode];
+
+  // relative path should be relative to cwd(), rather than Drupal root-dir
+  if (drush_is_absolute_path($file_path_arg))
+    $file_path = $file_path_arg;
+  else
+    $file_path = drush_cwd() . DIRECTORY_SEPARATOR . $file_path_arg;
+
+
+  // Don't override destination file
+  // Unlike file_exists(), this condition allow the use of /dev/stdin.
+  if (is_file($file_path) || is_dir($file_path)) {
+    drush_set_error(dt('drush language-export: will not override destination file'));
+    return;
+  }
+
+  if($file_path == '-')
+    echo _locale_export_po_generate($language, _locale_export_get_strings($language, $group));
+  else
+    file_put_contents($file_path, _locale_export_po_generate($language, _locale_export_get_strings($language, $group)));
 }
