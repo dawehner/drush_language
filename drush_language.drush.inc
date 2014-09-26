@@ -1,4 +1,6 @@
 <?php
+use Drupal\language\Entity\ConfigurableLanguage;
+use Drupal\locale\Gettext;
 
 /**
  * Implementation of hook_drush_command().
@@ -8,7 +10,7 @@
  * @return
  *   An associative array describing your command(s).
  */
-function language_drush_command() {
+function drush_language_drush_command() {
   $items = array();
   $items['language-add'] = array(
     'description' => "Add and import a new language definition",
@@ -167,7 +169,7 @@ function drush_language_enable() {
 /**
  * Disables a language
  */
-function drush_language_disable() {
+function drush_drush_language_disable() {
   $args = func_get_args();
   if (count($args) == 0) {
     drush_set_error(dt('Please provide one or more language codes as arguments.'));
@@ -175,9 +177,10 @@ function drush_language_disable() {
   }
 
   foreach ($args as $langcode) {
-    $languages = language_list();
+    $language_manager = \Drupal::languageManager();
+    $languages = $language_manager->getLanguages();
     if (array_key_exists($langcode, $languages)) {
-      if ($languages[$langcode]->enabled) {
+      if ($languages[$langcode]->is) {
         // disable the default english
         db_update('languages')
           ->condition('language', $langcode)
@@ -200,7 +203,7 @@ function drush_language_disable() {
 /**
  * Assigns the default language
  */
-function drush_language_default() {
+function drush_drush_language_default() {
   $args = func_get_args();
   if (count($args) == 0) {
     drush_set_error(dt('Please provide one or more language codes as arguments.'));
@@ -209,9 +212,12 @@ function drush_language_default() {
 
   foreach ($args as $langcode) {
     // get all the languages
-    $languages = language_list();
+    $language_manager = \Drupal::languageManager();
+    $languages = $language_manager->getLanguages();
     if (array_key_exists($langcode, $languages)) {
-      variable_set('language_default', (object) $languages[$langcode]);
+      $default_language = ConfigurableLanguage::load($langcode);
+      $default_language->set('default', TRUE);
+      $default_language->save();
       drush_log(dt("!language assigned as default", array('!language' => $langcode)), 'ok');
     }
     else {
@@ -223,7 +229,7 @@ function drush_language_default() {
 /**
  * Import a .po file
  */
-function drush_language_import() {
+function drush_drush_language_language_import() {
   $args = func_get_args();
   if (count($args) < 2) {
     drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--replace] [--group=group]'));
@@ -234,7 +240,7 @@ function drush_language_import() {
   $langcode = array_shift($args);
   $file_paths = $args;
   $replace_arg = drush_get_option('replace');
-  $mode = isset($replace_arg) ? LOCALE_IMPORT_OVERWRITE : LOCALE_IMPORT_KEEP;
+  $overwrite_options = isset($replace_arg) ? 'customized' : 'not_customized';
   $group = drush_get_option('group', 'default');
   if($group === TRUE) {
     drush_set_error(dt('drush language-import --group option expects a string value'));
@@ -243,13 +249,14 @@ function drush_language_import() {
 
   // Add language, if not yet supported
   drupal_static_reset('language_list');
-  $languages = language_list('language');
+  $languages = \Drupal::languageManager()->getLanguages();
 
   if (!isset($languages[$langcode])) {
-    include_once DRUPAL_ROOT . '/includes/iso.inc';
-    $predefined = _locale_get_predefined_list();
-    locale_add_language($langcode);
-    drush_log(dt('The language %language has been created.', array('%language' => dt($predefined[$langcode][0]))));
+    /** @var \Drupal\Core\Locale\CountryManagerInterface $country_manager */
+    $country_manager = \Drupal::service('country_manager');
+    $predefined = $country_manager->getList();
+    \Drupal::entityManager()->getStorage('configurable_language')->create(['langcode' => $langcode]);
+    drush_log(dt('The language %language has been created.', array('%language' => dt($predefined[$langcode]))));
   }
 
   // Import language files
@@ -269,12 +276,13 @@ function drush_language_import() {
       $file->status   = 0;
       $file->filename = trim(drupal_basename($file_path), '.');
       $file->uri      = $file_path;
+      $file->langcode = $langcode;
 
       // Now import strings into the language
-      if ($return = _locale_import_po($file, $langcode, $mode, $group) == FALSE) {
+      if (!($report = Gettext::fileToDatabase($file, ['overwrite_options' => $overwrite_options]))) {
         $variables = array('%filename' => $file->filename);
         drush_log(dt('The translation import of %filename failed.', $variables), 'error');
-        watchdog('locale', 'The translation import of %filename failed.', $variables, WATCHDOG_ERROR);
+        \Drupal::logger('locale')->error('The translation import of %filename failed.', $variables, WATCHDOG_ERROR);
       }
     }
     else {
