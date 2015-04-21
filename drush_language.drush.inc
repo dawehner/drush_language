@@ -87,12 +87,11 @@ function drush_language_drush_command() {
 /**
  * Add a language
  */
-function drush_language_add() {
-  if (!function_exists('locale_add_language')) {
-    drush_set_error(dt('Could not add language. Is the \'locale\' module enabled?'));
+function drush_drush_language_language_add() {
+  if (!\Drupal::moduleHandler()->moduleExists('language')) {
+    drush_set_error(dt('Could not add language. Is the \'language\' module enabled?'));
     return;
   }
-
   $args = func_get_args();
   if (count($args) == 0) {
     drush_set_error(dt('Please provide one or more language codes as arguments.'));
@@ -100,29 +99,34 @@ function drush_language_add() {
   }
 
   foreach ($args as $langcode) {
-    if (array_key_exists($langcode, language_list())) {
+    $language_list = \Drupal::languageManager()->getLanguages();
+    if (array_key_exists($langcode, $language_list)) {
       drush_log(dt('The language with code !code already exists.', array('!code' => $langcode)), 'warning');
     }
     else {
       // Predefined language selection.
-      include_once DRUPAL_ROOT . '/includes/iso.inc';
-      $predefined = _locale_get_predefined_list();
+      $predefined = \Drupal::languageManager()->getStandardLanguageListWithoutConfigured();
       if (!isset($predefined[$langcode])) {
         drush_log(dt('Invalid language code !language', array('!language' => $langcode)), 'warning');
       }
       else {
-        // Add the language definition
-        locale_add_language($langcode);
-        // See if we have language files to import for the newly added
-        // language, collect and import them.
-        if ($batch = locale_batch_by_language($langcode, '_locale_batch_language_finished')) {
-          batch_set($batch);
+        // Add the language definition.
+        $language = ConfigurableLanguage::createFromLangcode($langcode);
+        $language->save();
 
-          $batch =& batch_get();
-          $batch['progressive'] = FALSE;
+        // Download and import translations for the newly added language if
+        // interface translation is enabled.
+        if (\Drupal::moduleHandler()->moduleExists('locale')) {
+          module_load_include('fetch.inc', 'locale');
+          $options = _locale_translation_default_update_options();
+          if ($batch = locale_translation_batch_update_build(array(), array($langcode), $options)) {
+            batch_set($batch);
+            $batch =& batch_get();
+            $batch['progressive'] = FALSE;
 
-          // Process the batch.
-          drush_backend_batch_process();
+            // Process the batch.
+            drush_backend_batch_process();
+          }
         }
         drush_log(dt('Added language: !language', array('!language' => $langcode)), 'ok');
       }
