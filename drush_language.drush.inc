@@ -283,10 +283,14 @@ function drush_drush_language_language_import() {
       $file->langcode = $langcode;
 
       // Now import strings into the language
-      if (!($report = Gettext::fileToDatabase($file, ['customized' => isset($replace_arg), 'overwrite_options' => $overwrite_options]))) {
+      if (!($report = Gettext::fileToDatabase($file, ['customized' => isset($replace_arg) ? 1 : 0, 'overwrite_options' => $overwrite_options]))) {
         $variables = array('%filename' => $file->filename);
         drush_log(dt('The translation import of %filename failed.', $variables), 'error');
         \Drupal::logger('locale')->error('The translation import of %filename failed.', $variables, WATCHDOG_ERROR);
+      }
+      else {
+        $variables = array('@filename' => $file->filename);
+        drush_log(dt('The translation import of @filename succeeded.', $variables), 'success');
       }
     }
     else {
