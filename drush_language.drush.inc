@@ -339,7 +339,7 @@ function drush_drush_language_language_export() {
     $file_path = $file_path_arg;
   }
   else {
-    $file_path = drush_locate_root() . DIRECTORY_SEPARATOR . $file_path_arg;
+    $file_path = drush_get_context('DRUSH_DRUPAL_ROOT') . DIRECTORY_SEPARATOR . $file_path_arg;
   }
 
   // Check if file_path exists and is writable.
@@ -379,7 +379,7 @@ function drush_drush_language_language_export() {
     $writer->writeItems($reader);
     $writer->close();
 
-    drush_set_error(dt('Export complete.'));
+    drush_log('Export complete.', 'success');
   }
   else {
     drush_set_error(dt('Nothing to export.'));
