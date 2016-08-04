@@ -293,7 +293,7 @@ function drush_drush_language_language_import() {
     // Probably not an absolute path.
     // Test from the original $cwd.
     if (!file_exists($file_path)) {
-      $file_path = drush_locate_root() . '/' . $file_path;
+      $file_path = drush_get_context('DRUSH_DRUPAL_ROOT') . '/' . $file_path;
     }
 
     // Ensure we have the file intended for upload.
@@ -338,6 +338,7 @@ function drush_drush_language_language_import() {
   }
 
   drush_backend_batch_process();
+  drush_log('Import complete.', 'success');
 }
 
 /**
