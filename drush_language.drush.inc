@@ -1,6 +1,8 @@
 <?php
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\locale\Gettext;
+use Drupal\locale\PoDatabaseReader;
+use Drupal\Component\Gettext\PoStreamWriter;
 
 /**
  * Implementation of hook_drush_command().
@@ -301,49 +303,85 @@ function drush_drush_language_language_import() {
 }
 
 /**
- * Export a .po file
+ * Exports .po file(s).
+ *
+ * @see \Drupal\locale\Form\ExportForm::submitForm
+ *
+ * @todo Implement \Drupal\locale\Form\ExportForm::buildForm
+ * @todo This can be simplified once https://www.drupal.org/node/2631584 lands
+ *   in Drupal core.
  */
-function drush_language_export() {
+function drush_drush_language_language_export() {
   $args = func_get_args();
   if (count($args) < 2) {
-    drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--group=group]'));
+    drush_set_error(dt('Usage: drush language-export <langcode> <path_to/file.po> [--group=group]'));
     return;
   }
 
-  // Get arguments and options
+  // Get arguments and options.
   $langcode = array_shift($args);
   $file_path_arg = array_shift($args);
   $group = drush_get_option('group', 'default');
-  if($group === TRUE) {
-    drush_set_error(dt('drush language-import --group option expects a string value'));
+  if ($group === TRUE) {
+    drush_set_error(dt('drush language-export --group option expects a string value'));
     return;
   }
 
-  // Ensure the langcode match an existing language
-  drupal_static_reset('language_list');
-  $languages = language_list('language');
-  if (!isset($languages[$langcode])) {
+  // Ensure the langcode match an existing language.
+  $language = \Drupal::languageManager()->getLanguage($langcode);
+  if ($language == NULL) {
     drush_set_error(dt('drush language-export: no such language'));
     return;
   }
-  $language = $languages[$langcode];
 
-  // relative path should be relative to cwd(), rather than Drupal root-dir
-  if (drush_is_absolute_path($file_path_arg))
+  // Relative path should be relative to cwd(), rather than Drupal root-dir.
+  if (drush_is_absolute_path($file_path_arg)) {
     $file_path = $file_path_arg;
-  else
-    $file_path = drush_cwd() . DIRECTORY_SEPARATOR . $file_path_arg;
-
-
-  // Don't override destination file
-  // Unlike file_exists(), this condition allow the use of /dev/stdin.
-  if (is_file($file_path) || is_dir($file_path)) {
-    drush_set_error(dt('drush language-export: will not override destination file'));
-    return;
+  }
+  else {
+    $file_path = drush_locate_root() . DIRECTORY_SEPARATOR . $file_path_arg;
   }
 
-  if($file_path == '-')
-    echo _locale_export_po_generate($language, _locale_export_get_strings($language, $group));
-  else
-    file_put_contents($file_path, _locale_export_po_generate($language, _locale_export_get_strings($language, $group)));
+  // Check if file_path exists and is writable.
+  $dir = dirname($file_path);
+  if(!file_prepare_directory($dir)) {
+    file_prepare_directory($dir, FILE_MODIFY_PERMISSIONS | FILE_CREATE_DIRECTORY);
+  }
+
+  $reader = new PoDatabaseReader();
+  $language_name = '';
+  if ($language != NULL) {
+    $reader->setLangcode($language->getId());
+    $reader->setOptions([
+      // Include non-customized translations.
+      'not_customized' => TRUE,
+      // Include customized translations.
+      'customized' => TRUE,
+      // Include untranslated text.
+      'not_translated' => TRUE,
+
+    ]);
+    $languages = \Drupal::languageManager()->getLanguages();
+    $language_name = isset($languages[$language->getId()]) ? $languages[$language->getId()]->getName() : '';
+  }
+  $item = $reader->readItem();
+  if (!empty($item)) {
+    $header = $reader->getHeader();
+    $header->setProjectName(\Drupal::config('system.site')->get('name'));
+    $header->setLanguageName($language_name);
+
+    $writer = new PoStreamWriter();
+    $writer->setUri($file_path);
+    $writer->setHeader($header);
+
+    $writer->open();
+    $writer->writeItem($item);
+    $writer->writeItems($reader);
+    $writer->close();
+
+    drush_set_error(dt('Export complete.'));
+  }
+  else {
+    drush_set_error(dt('Nothing to export.'));
+  }
 }
