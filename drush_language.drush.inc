@@ -1,4 +1,5 @@
 <?php
+use Drupal\Core\Language\LanguageInterface;
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\locale\Gettext;
 
@@ -231,7 +232,13 @@ function drush_drush_language_default() {
 }
 
 /**
- * Import a .po file
+ * Imports .po file(s).
+ *
+ * @see \Drupal\locale\Form\ImportForm::submitForm
+ *
+ * @todo Implement \Drupal\locale\Form\ImportForm::buildForm
+ * @todo This can be simplified once https://www.drupal.org/node/2631584 lands
+ *   in Drupal core.
  */
 function drush_drush_language_language_import() {
   $args = func_get_args();
@@ -239,65 +246,99 @@ function drush_drush_language_language_import() {
     drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--replace] [--group=group]'));
     return;
   }
+  $module_handler = \Drupal::moduleHandler();
+  $module_handler->loadInclude('locale', 'translation.inc');
+  $module_handler->loadInclude('locale', 'bulk.inc');
 
-  // Get arguments and options
+  // Get arguments and options.
   $langcode = array_shift($args);
   $file_paths = $args;
+  // Overwrite existing customized and non-customized translations.
   $replace_arg = drush_get_option('replace');
   $overwrite_options = isset($replace_arg) ? ['customized' => TRUE] : ['not_customized' => TRUE];
+  // Translation project (interface_translation_properties).
   $group = drush_get_option('group', 'default');
-  if($group === TRUE) {
+  if ($group === TRUE) {
     drush_set_error(dt('drush language-import --group option expects a string value'));
     return;
   }
 
-  // Add language, if not yet supported
-  drupal_static_reset('language_list');
+  // Add language, if not yet supported.
   $languages = \Drupal::languageManager()->getLanguages();
 
   if (!isset($languages[$langcode])) {
     /** @var \Drupal\Core\Locale\CountryManagerInterface $country_manager */
     $country_manager = \Drupal::service('country_manager');
     $predefined = $country_manager->getList();
-    \Drupal::entityManager()->getStorage('configurable_language')->create(['langcode' => $langcode]);
+    \Drupal::entityTypeManager()->getStorage('configurable_language')->create(['langcode' => $langcode]);
     drush_log(dt('The language %language has been created.', array('%language' => dt($predefined[$langcode]))));
   }
 
-  // Import language files
+  $options = array_merge(_locale_translation_default_update_options(), [
+    'langcode' => $langcode,
+    'customized' => LOCALE_CUSTOMIZED,
+    'overwrite_options' => isset($replace_arg) ? [
+      'customized' => 1,
+      'not_customized' => 1,
+    ] : [
+      'customized' => 0,
+      'not_customized' => 1,
+    ],
+  ]);
+
+  // Import language files.
+  $files = [];
+  $langcodes = [];
   foreach ($file_paths as $file_path) {
-    // probably not an absolute path
-    // test from the original $cwd
+    // Probably not an absolute path.
+    // Test from the original $cwd.
     if (!file_exists($file_path)) {
-      $file_path = drush_cwd() . '/' . $file_path;
+      $file_path = drush_get_context('DRUSH_DRUPAL_ROOT') . '/' . $file_path;
     }
 
-    // Ensure we have the file intended for upload
+    // Ensure we have the file intended for upload.
     if (file_exists($file_path)) {
-
-      // Construct fake file object
-      $file = new stdClass();
-      $file->uid      = 1;
-      $file->status   = 0;
-      $file->filename = trim(drupal_basename($file_path), '.');
-      $file->uri      = $file_path;
-      $file->langcode = $langcode;
-
-      // Now import strings into the language
-      if (!($report = Gettext::fileToDatabase($file, ['customized' => isset($replace_arg) ? 1 : 0, 'overwrite_options' => $overwrite_options]))) {
-        $variables = array('%filename' => $file->filename);
-        drush_log(dt('The translation import of %filename failed.', $variables), 'error');
-        \Drupal::logger('locale')->error('The translation import of %filename failed.', $variables);
+      // Create file.
+      $file = locale_translate_file_create($file_path);
+      // Extract project, version and language code from the file name
+      // Supported:
+      // - {project}-{version}.{langcode}.po, {prefix}.{langcode}.po
+      // - {langcode}.po
+      // or from user input.
+      $file = locale_translate_file_attach_properties($file, $options);
+      if ($file->langcode = LanguageInterface::LANGCODE_NOT_SPECIFIED) {
+        $file->langcode = $langcode;
+        if ($group != 'default') {
+          $file->project = $group;
+        }
+        if (empty($file->version) && !empty($file->project) && !empty($file->langcode)) {
+          $sources = locale_translation_get_status();
+          $source = $sources[$file->project][$file->langcode];
+          if (isset($source->version)) {
+            $file->version = $source->version;
+          }
+        }
       }
-      else {
-        $variables = array('@filename' => $file->filename);
-        drush_log(dt('The translation import of @filename succeeded.', $variables), 'success');
-      }
+      $langcodes[] = $file->langcode;
+      $files[] = $file;
     }
     else {
-      $variables = array('!filepath' => $file_path);
-      drush_log(dt('File to import at !filepath not found.', $variables), 'error');
+      $variables = ['@filepath' => $file_path];
+      drush_log(dt('File to import at @filepath not found.', $variables), 'error');
     }
   }
+
+  $batch = locale_translate_batch_build($files, $options);
+  batch_set($batch);
+
+  // Create or update all configuration translations for this language.
+  $langcodes = array_unique($langcodes);
+  if ($batch = locale_config_batch_update_components($options, $langcodes)) {
+    batch_set($batch);
+  }
+
+  drush_backend_batch_process();
+  drush_log('Import complete.', 'success');
 }
 
 /**
