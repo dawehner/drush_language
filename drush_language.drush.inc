@@ -53,15 +53,28 @@ function drush_language_drush_command() {
       'Import multiple files' => 'drush langimp eo file1.po file2.po ...',
       'Import with replacement' => 'drush langimp eo file.po --replace',
       'Import with custom group' => 'drush langimp eo file.po --group=mygroup',
+      'Import without treating as customized' => 'drush langimp eo file.po --customized=0',
     ),
     'options' => array(
       'replace' => array(
-        'description' => dt('Replace existing translations.'),
-        'value' => 'optional'
+        'description' => dt('Shorthand for --replace-customized and --replace-non-customized.'),
+        'value' => 'optional',
+      ),
+      'replace-customized' => array(
+        'description' => dt('Replace existing customized translations.'),
+        'value' => 'optional',
+      ),
+      'replace-non-customized' => array(
+        'description' => dt('Replace existing non-customized translations.'),
+        'value' => 'optional',
+      ),
+      'customized' => array(
+        'description' => dt('Treat imported strings as custom translations. Defaults to TRUE.'),
+        'value' => 'optional',
       ),
       'group' => array(
         'description' => dt('The group to which the strings should be imported, defaults to \'default\'.'),
-        'value' => 'optional'
+        'value' => 'optional',
       ),
     ),
     'aliases' => array('langimp'),
@@ -255,9 +268,20 @@ function drush_drush_language_language_import() {
   // Get arguments and options.
   $langcode = array_shift($args);
   $file_paths = $args;
-  // Overwrite existing customized and non-customized translations.
-  $replace_arg = drush_get_option('replace');
-  $overwrite_options = isset($replace_arg) ? ['customized' => TRUE] : ['not_customized' => TRUE];
+
+  // Evaluate overwriting options.
+  $replace_customized = (NULL !== drush_get_option('replace-customized'));
+  $replace_non_customized = (NULL !== drush_get_option('replace-non-customized'));
+  if (NULL !== drush_get_option('replace-customized')) {
+    $replace_customized = TRUE;
+    $replace_non_customized = TRUE;
+  }
+
+  $customized = drush_get_option('customized');
+  if (!isset($customized)) {
+    $customized = TRUE;
+  }
+
   // Translation project (interface_translation_properties).
   $group = drush_get_option('group', 'default');
   if ($group === TRUE) {
@@ -278,13 +302,10 @@ function drush_drush_language_language_import() {
 
   $options = array_merge(_locale_translation_default_update_options(), [
     'langcode' => $langcode,
-    'customized' => LOCALE_CUSTOMIZED,
-    'overwrite_options' => isset($replace_arg) ? [
-      'customized' => 1,
-      'not_customized' => 1,
-    ] : [
-      'customized' => 0,
-      'not_customized' => 1,
+    'customized' => $customized ? LOCALE_CUSTOMIZED : LOCALE_NOT_CUSTOMIZED,
+    'overwrite_options' => [
+      'customized' => $replace_customized,
+      'not_customized' => $replace_non_customized,
     ],
   ]);
 
