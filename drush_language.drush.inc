@@ -308,7 +308,7 @@ function drush_drush_language_language_import() {
       // - {langcode}.po
       // or from user input.
       $file = locale_translate_file_attach_properties($file, $options);
-      if ($file->langcode = LanguageInterface::LANGCODE_NOT_SPECIFIED) {
+      if ($file->langcode == LanguageInterface::LANGCODE_NOT_SPECIFIED) {
         $file->langcode = $langcode;
         if ($group != 'default') {
           $file->project = $group;
