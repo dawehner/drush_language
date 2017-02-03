@@ -74,12 +74,19 @@ function drush_language_drush_command() {
     ),
     'examples' => array(
       'Export the french translation of the translatable menu items' => 'drush langexp --group=menu fr menu.fr.po',
+      'Export the japanese translation that includes only customized' => 'drush langexp ja --include=customized custom.ja.po',
     ),
     'options' => array(
       'group' => array(
         'description' => dt('The text-group to export, defaults to \'default\'.' . "\n" .
 			    'According to enabled modules this could be "blocks", "menu", "taxonomy", "countries", ...'),
         'value' => 'optional'
+      ),
+      'include' => array(
+        'description' => dt('Comma-separated list of status of translations to export. ' . "\n" .
+          'defaults to "not_customized,customized,not_translated".'),
+        'example-value' => 'not_customized,customized,not_translated',
+        'value' => 'required',
       ),
     ),
     'aliases' => array('langexp'),
@@ -368,6 +375,18 @@ function drush_drush_language_language_export() {
     return;
   }
 
+  // Get --include option arguments.
+  $valid_includes = array('not_customized', 'customized', 'not_translated');
+  $includes = drush_get_option_list('include', array('not_customized', 'customized', 'not_translated'));
+  if (empty($includes)
+    || count(array_diff($includes, $valid_includes)) !== 0) {
+    drush_set_error(dt('drush language-export --include option expects valid comma-separated list.' . "\n" .
+      'Available value: !values.', array(
+      '!values' => '"' . implode('", "', $valid_includes) . '"',
+    )));
+    return;
+  }
+
   // Ensure the langcode match an existing language.
   $language = \Drupal::languageManager()->getLanguage($langcode);
   if ($language == NULL) {
@@ -394,13 +413,12 @@ function drush_drush_language_language_export() {
   if ($language != NULL) {
     $reader->setLangcode($language->getId());
     $reader->setOptions([
-      // Include non-customized translations.
-      'not_customized' => TRUE,
-      // Include customized translations.
-      'customized' => TRUE,
-      // Include untranslated text.
-      'not_translated' => TRUE,
-
+      // Whether include non-customized translations.
+      'not_customized' => array_search('not_customized', $includes) !== FALSE,
+      // Whether include customized translations.
+      'customized' => array_search('customized', $includes) !== FALSE,
+      // Whether include untranslated text.
+      'not_translated' => array_search('not_translated', $includes) !== FALSE,
     ]);
     $languages = \Drupal::languageManager()->getLanguages();
     $language_name = isset($languages[$language->getId()]) ? $languages[$language->getId()]->getName() : '';
