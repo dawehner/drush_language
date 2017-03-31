@@ -81,6 +81,11 @@ function drush_language_drush_command() {
 			    'According to enabled modules this could be "blocks", "menu", "taxonomy", "countries", ...'),
         'value' => 'optional'
       ),
+      'status' => array(
+        'description' => dt('The statuses to export, defaults to \'customized\'.' . "\n" .
+			    'This can be a comma-separated list of \'customized\', \'not-customized\', \'not-translated\', or \'all\'.'),
+        'value' => 'optional'
+      ),
     ),
     'aliases' => array('langexp'),
   );
@@ -375,6 +380,26 @@ function drush_drush_language_language_export() {
     return;
   }
 
+  // Validate export statuses.
+  $export_statuses_allowed = [
+    // internal-value => input-value
+    'customized' => 'customized',
+    'not_customized' => 'not-customized',
+    'not_translated' => 'not-translated',
+  ];
+  $export_statuses_input = drush_get_option_list('status', 'customized');
+  $export_statuses_input = array_values($export_statuses_input);
+  if ($export_statuses_input == ['all']) {
+    $export_statuses_input = $export_statuses_allowed;
+  }
+  $export_statuses_unknown = array_diff($export_statuses_input, $export_statuses_allowed);
+  if ($export_statuses_unknown) {
+    $t_args = ['@options' => implode(', ', $export_statuses_unknown)];
+    return drush_set_error(dt('drush language-export: Unknown status options: @options', $t_args));
+  }
+  $export_statuses_filtered = array_intersect($export_statuses_allowed, $export_statuses_input);
+  $export_statuses = array_fill_keys(array_keys($export_statuses_filtered), TRUE);
+
   // Relative path should be relative to cwd(), rather than Drupal root-dir.
   if (drush_is_absolute_path($file_path_arg)) {
     $file_path = $file_path_arg;
@@ -393,15 +418,7 @@ function drush_drush_language_language_export() {
   $language_name = '';
   if ($language != NULL) {
     $reader->setLangcode($language->getId());
-    $reader->setOptions([
-      // Include non-customized translations.
-      'not_customized' => TRUE,
-      // Include customized translations.
-      'customized' => TRUE,
-      // Include untranslated text.
-      'not_translated' => TRUE,
-
-    ]);
+    $reader->setOptions($export_statuses);
     $languages = \Drupal::languageManager()->getLanguages();
     $language_name = isset($languages[$language->getId()]) ? $languages[$language->getId()]->getName() : '';
   }
