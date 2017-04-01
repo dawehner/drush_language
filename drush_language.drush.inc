@@ -250,9 +250,6 @@ function drush_drush_language_language_import() {
   // Get arguments and options.
   $langcode = array_shift($args);
   $file_paths = $args;
-  // Overwrite existing customized and non-customized translations.
-  $replace_arg = drush_get_option('replace');
-  $overwrite_options = isset($replace_arg) ? ['customized' => TRUE] : ['not_customized' => TRUE];
 
   // Add language, if not yet supported.
   $languages = \Drupal::languageManager()->getLanguages();
@@ -268,7 +265,7 @@ function drush_drush_language_language_import() {
   $options = array_merge(_locale_translation_default_update_options(), [
     'langcode' => $langcode,
     'customized' => LOCALE_CUSTOMIZED,
-    'overwrite_options' => isset($replace_arg) ? [
+    'overwrite_options' => drush_get_option('replace') ? [
       'customized' => 1,
       'not_customized' => 1,
     ] : [
