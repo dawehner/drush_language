@@ -18,36 +18,36 @@ function drush_language_drush_command() {
   $items['language-add'] = array(
     'description' => "Add and import a new language definition",
     'arguments'   => array(
-      'langcode'    => dt('The langcode of the language for which a definition will be added.'),
+      'langcode'    => 'The langcode of the language for which a definition will be added.',
     ),
     'aliases' => array('langadd'),
   );
   $items['language-enable'] = array(
     'description' => "Enable an already defined language",
     'arguments'   => array(
-      'langcode'    => dt('The langcode of the language which will be enabled.'),
+      'langcode'    => 'The langcode of the language which will be enabled.',
     ),
     'aliases' => array('langen'),
   );
   $items['language-disable'] = array(
     'description' => "Disable an already defined language",
     'arguments'   => array(
-      'langcode'    => dt('The langcode of the language which will be disabled.'),
+      'langcode'    => 'The langcode of the language which will be disabled.',
     ),
     'aliases' => array('langdis'),
   );
   $items['language-default'] = array(
     'description' => "Assign an enabled language as default",
     'arguments'   => array(
-      'langcode'    => dt('The langcode of the language which will be set as the default language.'),
+      'langcode'    => 'The langcode of the language which will be set as the default language.',
     ),
     'aliases' => array('langdef'),
   );
   $items['language-import'] = array(
     'description' => "Import a single .po file",
     'arguments'   => array(
-      'langcode'    => dt('The langcode of the language in which the string will be imported.'),
-      '.po file'    => dt('Path to a .po file containing the translation. Can be multiple.'),
+      'langcode'    => 'The langcode of the language in which the string will be imported.',
+      '.po file'    => 'Path to a .po file containing the translation. Can be multiple.',
     ),
     'examples' => array(
       'Import multiple files' => 'drush langimp eo file1.po file2.po ...',
@@ -55,7 +55,7 @@ function drush_language_drush_command() {
     ),
     'options' => array(
       'replace' => array(
-        'description' => dt('Replace existing translations.'),
+        'description' => 'Replace existing translations.',
         'value' => 'optional'
       ),
     ),
@@ -64,16 +64,16 @@ function drush_language_drush_command() {
   $items['language-export'] = array(
     'description' => "Export string of a language as a .po file",
     'arguments'   => array(
-      'langcode'    => dt('The langcode of the language to exported.'),
-      '.po file'    => dt('Path to a .po file. Use "-" or /dev/stdin to use standard output.'),
+      'langcode'    => 'The langcode of the language to exported.',
+      '.po file'    => 'Path to a .po file. Use "-" or /dev/stdin to use standard output.',
     ),
     'examples' => array(
       'Export the french translation of the translatable menu items' => 'drush langexp fr menu.fr.po',
     ),
     'options' => array(
       'status' => array(
-        'description' => dt('The statuses to export, defaults to \'customized\'.' . "\n" .
-			    'This can be a comma-separated list of \'customized\', \'not-customized\', \'not-translated\', or \'all\'.'),
+        'description' => 'The statuses to export, defaults to \'customized\'.' . "\n" .
+			    'This can be a comma-separated list of \'customized\', \'not-customized\', \'not-translated\', or \'all\'.',
         'value' => 'optional'
       ),
     ),
