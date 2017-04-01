@@ -52,15 +52,10 @@ function drush_language_drush_command() {
     'examples' => array(
       'Import multiple files' => 'drush langimp eo file1.po file2.po ...',
       'Import with replacement' => 'drush langimp eo file.po --replace',
-      'Import with custom group' => 'drush langimp eo file.po --group=mygroup',
     ),
     'options' => array(
       'replace' => array(
         'description' => dt('Replace existing translations.'),
-        'value' => 'optional'
-      ),
-      'group' => array(
-        'description' => dt('The group to which the strings should be imported, defaults to \'default\'.'),
         'value' => 'optional'
       ),
     ),
@@ -73,14 +68,9 @@ function drush_language_drush_command() {
       '.po file'    => dt('Path to a .po file. Use "-" or /dev/stdin to use standard output.'),
     ),
     'examples' => array(
-      'Export the french translation of the translatable menu items' => 'drush langexp --group=menu fr menu.fr.po',
+      'Export the french translation of the translatable menu items' => 'drush langexp fr menu.fr.po',
     ),
     'options' => array(
-      'group' => array(
-        'description' => dt('The text-group to export, defaults to \'default\'.' . "\n" .
-			    'According to enabled modules this could be "blocks", "menu", "taxonomy", "countries", ...'),
-        'value' => 'optional'
-      ),
       'status' => array(
         'description' => dt('The statuses to export, defaults to \'customized\'.' . "\n" .
 			    'This can be a comma-separated list of \'customized\', \'not-customized\', \'not-translated\', or \'all\'.'),
@@ -250,7 +240,7 @@ function drush_drush_language_default() {
 function drush_drush_language_language_import() {
   $args = func_get_args();
   if (count($args) < 2) {
-    drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--replace] [--group=group]'));
+    drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--replace]'));
     return;
   }
   $module_handler = \Drupal::moduleHandler();
@@ -263,12 +253,6 @@ function drush_drush_language_language_import() {
   // Overwrite existing customized and non-customized translations.
   $replace_arg = drush_get_option('replace');
   $overwrite_options = isset($replace_arg) ? ['customized' => TRUE] : ['not_customized' => TRUE];
-  // Translation project (interface_translation_properties).
-  $group = drush_get_option('group', 'default');
-  if ($group === TRUE) {
-    drush_set_error(dt('drush language-import --group option expects a string value'));
-    return;
-  }
 
   // Add language, if not yet supported.
   $languages = \Drupal::languageManager()->getLanguages();
@@ -315,9 +299,6 @@ function drush_drush_language_language_import() {
       $file = locale_translate_file_attach_properties($file, $options);
       if ($file->langcode == LanguageInterface::LANGCODE_NOT_SPECIFIED) {
         $file->langcode = $langcode;
-        if ($group != 'default') {
-          $file->project = $group;
-        }
         if (empty($file->version) && !empty($file->project) && !empty($file->langcode)) {
           $sources = locale_translation_get_status();
           $source = $sources[$file->project][$file->langcode];
@@ -360,18 +341,13 @@ function drush_drush_language_language_import() {
 function drush_drush_language_language_export() {
   $args = func_get_args();
   if (count($args) < 2) {
-    drush_set_error(dt('Usage: drush language-export <langcode> <path_to/file.po> [--group=group]'));
+    drush_set_error(dt('Usage: drush language-export <langcode> <path_to/file.po>'));
     return;
   }
 
   // Get arguments and options.
   $langcode = array_shift($args);
   $file_path_arg = array_shift($args);
-  $group = drush_get_option('group', 'default');
-  if ($group === TRUE) {
-    drush_set_error(dt('drush language-export --group option expects a string value'));
-    return;
-  }
 
   // Ensure the langcode match an existing language.
   $language = \Drupal::languageManager()->getLanguage($langcode);
