@@ -43,7 +43,7 @@ function drush_language_drush_command() {
     ),
     'aliases' => array('langdef'),
   );
-  $items['language-import'] = array(
+  $items['language-import-translations'] = array(
     'description' => "Import a single .po file",
     'arguments'   => array(
       'langcode'    => 'The langcode of the language in which the string will be imported.',
@@ -59,9 +59,9 @@ function drush_language_drush_command() {
         'value' => 'optional'
       ),
     ),
-    'aliases' => array('langimp'),
+    'aliases' => array('langimp', 'language-import'),
   );
-  $items['language-export'] = array(
+  $items['language-export-translations'] = array(
     'description' => "Export string of a language as a .po file",
     'arguments'   => array(
       'langcode'    => 'The langcode of the language to exported.',
@@ -77,7 +77,7 @@ function drush_language_drush_command() {
         'value' => 'optional'
       ),
     ),
-    'aliases' => array('langexp'),
+    'aliases' => array('langexp', 'language-export'),
   );
   return $items;
 }
@@ -237,7 +237,7 @@ function drush_drush_language_default() {
  * @todo This can be simplified once https://www.drupal.org/node/2631584 lands
  *   in Drupal core.
  */
-function drush_drush_language_language_import() {
+function drush_drush_language_language_import_translations() {
   $args = func_get_args();
   if (count($args) < 2) {
     drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--replace]'));
@@ -335,7 +335,7 @@ function drush_drush_language_language_import() {
  * @todo This can be simplified once https://www.drupal.org/node/2631584 lands
  *   in Drupal core.
  */
-function drush_drush_language_language_export() {
+function drush_drush_language_language_export_translations() {
   $args = func_get_args();
   if (count($args) < 2) {
     drush_set_error(dt('Usage: drush language-export <langcode> <path_to/file.po>'));
