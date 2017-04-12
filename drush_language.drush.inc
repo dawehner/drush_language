@@ -79,6 +79,26 @@ function drush_language_drush_command() {
     ),
     'aliases' => array('langexp', 'language-export'),
   );
+  $items['language-export-all-translations'] = array(
+    'description' => 'Export all translations to files',
+    'drush dependencies' => ['drush_language'],
+    'options' => array(
+      'langcodes' => array(
+        'description' => 'The language codes to export. Defaults to all enabled languages.',
+        'value' => 'optional'
+      ),
+      'file-pattern' => array(
+        'description' => 'The target file pattern. Defaults to \'translations/custom/%language.po\'.' . "\n" .
+          'Note that this is the only place where this module\'s auto-importing works.',
+        'value' => 'optional'
+      ),
+      'all' => array(
+        'description' => 'If set, exports all translations instead of only customized ones.',
+        'value' => 'optional'
+      ),
+    ),
+    'aliases' => array('langexpall', 'language-export-all'),
+  );
   return $items;
 }
 
@@ -414,5 +434,25 @@ function drush_drush_language_language_export_translations() {
   }
   else {
     drush_set_error(dt('Nothing to export.'));
+  }
+}
+
+function drush_drush_language_language_export_all_translations() {
+  $langcodes = drush_get_option_list('langcode');
+  if (!$langcodes) {
+    $languages = \Drupal::languageManager()->getLanguages();
+    $langcodes = array_keys($languages);
+  }
+  $file_pattern = drush_get_option('file_pattern', 'translations/custom/%language.po');
+  $options = ['status' => drush_get_option('all') ? 'all' : 'customized'];
+  foreach ($langcodes as $langcode) {
+    $file_path_relative = preg_replace('/%language/u', $langcode, $file_pattern);
+    $file_name_absolute = drush_is_absolute_path($file_path_relative) ?
+      $file_path_relative : drush_get_context('DRUSH_DRUPAL_ROOT') . '/' . $file_path_relative;
+    drush_invoke_process('@self', 'language-export', [$langcode,
+      $file_name_absolute
+    ], $options);
+    $t_args = ['!language' => $langcode, '!file' => $file_path_relative];
+    drush_log(dt('Exported translations for language !language to file !file.', $t_args), 'ok');
   }
 }
