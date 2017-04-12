@@ -68,7 +68,7 @@ function drush_language_drush_command() {
       '.po file'    => 'Path to a .po file. Use "-" or /dev/stdin to use standard output.',
     ),
     'examples' => array(
-      'Export the french translation of the translatable menu items' => 'drush langexp fr menu.fr.po',
+      'Export the french translation' => 'drush langexp fr fr.po',
     ),
     'options' => array(
       'status' => array(
