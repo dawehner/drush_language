@@ -155,7 +155,7 @@ function drush_drush_language_language_add() {
 /**
  * Enable a language
  */
-function drush_language_enable() {
+function drush_drush_language_language_enable() {
   $args = func_get_args();
   if (count($args) == 0) {
     drush_set_error(dt('Please provide one or more language codes as arguments.'));
@@ -191,7 +191,7 @@ function drush_language_enable() {
 /**
  * Disables a language
  */
-function drush_drush_language_disable() {
+function drush_drush_language_language_disable() {
   $args = func_get_args();
   if (count($args) == 0) {
     drush_set_error(dt('Please provide one or more language codes as arguments.'));
@@ -225,7 +225,7 @@ function drush_drush_language_disable() {
 /**
  * Assigns the default language
  */
-function drush_drush_language_default() {
+function drush_drush_language_language_default() {
   $args = func_get_args();
   if (count($args) == 0) {
     drush_set_error(dt('Please provide one or more language codes as arguments.'));
@@ -237,9 +237,7 @@ function drush_drush_language_default() {
     $language_manager = \Drupal::languageManager();
     $languages = $language_manager->getLanguages();
     if (array_key_exists($langcode, $languages)) {
-      $default_language = ConfigurableLanguage::load($langcode);
-      $default_language->set('default', TRUE);
-      $default_language->save();
+      \Drupal::configFactory()->getEditable('system.site')->set('default_langcode', $langcode)->save();
       drush_log(dt("!language assigned as default", array('!language' => $langcode)), 'ok');
     }
     else {
