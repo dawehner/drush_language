@@ -9,6 +9,7 @@ use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
 use Drupal\Core\Language\LanguageInterface;
 use Drupal\Core\Locale\CountryManagerInterface;
+use Drupal\Core\StringTranslation\StringTranslationTrait;
 use Drupal\language\ConfigurableLanguageManagerInterface;
 use Drupal\language\Entity\ConfigurableLanguage;
 use Drupal\locale\PoDatabaseReader;
@@ -18,6 +19,8 @@ use Drush\Utils\StringUtils;
  * Implements the Drush language commands.
  */
 class DrushLanguageCommands extends DrushCommands {
+
+  use StringTranslationTrait;
 
   /**
    * The cache.page bin.
@@ -290,18 +293,18 @@ class DrushLanguageCommands extends DrushCommands {
    *
    * @param string $langcode
    *   The langcode of the language in which the string will be imported.
-   * @param string $poFile
-   *   Path to a .po file containing the translation. Can be multiple.
-   * @param array $options
-   *   Import options.
+   * @param array $poFiles
+   *   Comma-separated list of paths .po files containing the translations.
    *
    * @command language:import:translations
    *
    * @option replace Replace existing translations.
+   *
    * @usage Import multiple files
    *   drush langimp eo file1.po file2.po ...
    * @usage Import with replacement
    *   drush langimp eo file.po --replace
+   *
    * @aliases langimp,language-import,language-import-translations
    *
    * @see \Drupal\locale\Form\ImportForm::submitForm
@@ -312,66 +315,52 @@ class DrushLanguageCommands extends DrushCommands {
    *   in Drupal core.
    */
   public function importTranslations(
-    $langcode,
-    $poFile,
-    array $options = ['replace' => NULL]
-  ) {
-    $args = func_get_args();
-    if (count($args) < 2) {
-      drush_set_error(dt('Usage: drush language-import <langcode> <path_to/file.po> [--replace]'));
-      return;
-    }
+    string $langcode,
+    array $poFiles,
+    array $options = ['replace' => FALSE]) {
     $this->moduleHandler->loadInclude('locale', 'translation.inc');
-    $this->moduleHandler->loadInclude('locale', 'bulk.inc');
 
-    // Get arguments and options.
-    $langcode = array_shift($args);
-    $file_paths = $args;
+    $poFiles = StringUtils::csvToArray($poFiles);
 
     // Add language, if not yet supported.
-    $languages = $this->languageManager->getLanguages();
-
-    if (!isset($languages[$langcode])) {
-      $predefined = $this->countryManager->getList();
-      $this->entityTypeManager
-        ->getStorage('configurable_language')
-        ->create(['langcode' => $langcode]);
-      drush_log(dt('The language %language has been created.',
-        ['%language' => dt($predefined[$langcode])]));
+    $language = $this->languageManager->getLanguage($langcode);
+    if (empty($language)) {
+      $language = ConfigurableLanguage::createFromLangcode($langcode);
+      $language->save();
+      $this->logger()->notice('Language {langcode} ({language}) has been created.', [
+        'langcode' => $langcode,
+        'language' => $this->t($language->label()),
+      ]);
     }
 
-    $options = array_merge(_locale_translation_default_update_options(), [
+    $this->moduleHandler->loadInclude('locale', 'bulk.inc');
+    $buildOptions = array_merge(_locale_translation_default_update_options(), [
       'langcode' => $langcode,
       'customized' => LOCALE_CUSTOMIZED,
-      'overwrite_options' => drush_get_option('replace') ? [
-        'customized' => 1,
-        'not_customized' => 1,
-      ] : [
-        'customized' => 0,
-        'not_customized' => 1,
-      ],
+      'overwrite_options' => $options['replace']
+      ? ['customized' => 1, 'not_customized' => 1]
+      : ['customized' => 0, 'not_customized' => 1],
     ]);
 
     // Import language files.
     $files = [];
     $langcodes = [];
-    foreach ($file_paths as $file_path) {
-      // Probably not an absolute path.
-      // Test from the original $cwd.
-      if (!file_exists($file_path)) {
-        $file_path = drush_get_context('DRUSH_DRUPAL_ROOT') . '/' . $file_path;
+    foreach ($poFiles as $poFile) {
+      // Probably not an absolute path: test from the original $cwd.
+      if (!file_exists($poFile)) {
+        $poFile = drush_get_context('DRUSH_DRUPAL_ROOT') . '/' . $poFile;
       }
 
       // Ensure we have the file intended for upload.
-      if (file_exists($file_path)) {
-        // Create file.
-        $file = locale_translate_file_create($file_path);
+      if (file_exists($poFile)) {
+        // Create file object.
+        $file = locale_translate_file_create($poFile);
         // Extract project, version and language code from the file name
         // Supported:
         // - {project}-{version}.{langcode}.po, {prefix}.{langcode}.po
         // - {langcode}.po
         // or from user input.
-        $file = locale_translate_file_attach_properties($file, $options);
+        $file = locale_translate_file_attach_properties($file, $buildOptions);
         if ($file->langcode == LanguageInterface::LANGCODE_NOT_SPECIFIED) {
           $file->langcode = $langcode;
           if (empty($file->version) && !empty($file->project) && !empty($file->langcode)) {
@@ -386,23 +375,23 @@ class DrushLanguageCommands extends DrushCommands {
         $files[] = $file;
       }
       else {
-        $variables = ['@filepath' => $file_path];
-        drush_log(dt('File to import at @filepath not found.', $variables),
-          'error');
+        $this->logger()->error('File to import at {filepath} not found.', [
+          'filepath' => $poFile,
+        ]);
       }
     }
 
-    $batch = locale_translate_batch_build($files, $options);
+    $batch = locale_translate_batch_build($files, $buildOptions);
     batch_set($batch);
 
     // Create or update all configuration translations for this language.
     $langcodes = array_unique($langcodes);
-    if ($batch = locale_config_batch_update_components($options, $langcodes)) {
+    if ($batch = locale_config_batch_update_components($buildOptions, $langcodes)) {
       batch_set($batch);
     }
 
     drush_backend_batch_process();
-    drush_log('Import complete.', 'success');
+    $this->logger()->info('Import complete.');
   }
 
   /**
