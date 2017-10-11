@@ -142,48 +142,56 @@ class DrushLanguageCommands extends DrushCommands {
   }
 
   /**
-   * Enable an already defined language.
+   * Enable one or more already defined languages.
    *
-   * @param string $langcode
-   *   The langcode of the language which will be enabled.
+   * @param array $langcodes
+   *   A comma-separated list of langcodes which will be enabled.
    *
    * @command language:enable
    *
    * @aliases langen,language-enable
    */
-  public function enable($langcode) {
-    $args = func_get_args();
-    if (count($args) == 0) {
-      drush_set_error(dt('Please provide one or more language codes as arguments.'));
+  public function enable(array $langcodes) {
+    $langcodes = StringUtils::csvToArray($langcodes);
+
+    if (empty($langcodes)) {
+      $this->logger()->error('Please provide one or more comma-separated language codes as arguments.');
       return;
     }
 
-    foreach ($args as $langcode) {
-      $languages = language_list();
-      if (array_key_exists($langcode, $languages)) {
-        if (!$languages[$langcode]->enabled) {
-          // Disable the default english.
-          db_update('languages')
-            ->condition('language', $langcode)
-            ->fields([
-              'enabled' => 1,
-            ])
-            ->execute();
+    foreach ($langcodes as $langcode) {
+      $messageArgs = ['langcode' => $langcode];
 
-          // Changing the language settings impacts the interface.
-          cache_clear_all('*', 'cache_page', TRUE);
-          drush_log(dt("Enabled language : {langcode} ",
-            ['langcode' => $langcode]), 'ok');
-        }
-        else {
-          drush_log(dt("Language already enabled: {langcode} ",
-            ['langcode' => $langcode]), 'warning');
-        }
+      // In the foreach loop because the list changes on successful iterations.
+      $languages = $this->languageManager->getLanguages();
+
+      // Skip nonexistent languages.
+      if (!isset($languages[$langcode])) {
+        $this->logger()->warning('Specified language does not exist {langcode}', $messageArgs);
+        continue;
       }
-      else {
-        drush_log(dt("Specified language does not exist {langcode}",
-          ['langcode' => $langcode]), 'warning');
+
+      // Skip already-enabled languages.
+      if ($languages[$langcode]->enabled) {
+        $this->logger()->warning('Language already enabled: !language', $messageArgs);
+        continue;
       }
+
+      // FIXME find the D8 equivalent: this is D7 logic.
+      // Disable the default english.
+      db_update('languages')
+        ->condition('language', $langcode)
+        ->fields([
+          'enabled' => 1,
+        ])
+        ->execute();
+
+      // FIXME probably needs a more generic invalidation.
+      // Changing the language settings impacts the interface.
+      \Drupal::cache('page')->deleteAll();
+      $this->logger()->info('Enabled language : {langcode}', [
+        'langcode' => $langcode,
+      ]);
     }
   }
 

@@ -166,7 +166,8 @@ function drush_language_enable() {
     $languages = language_list();
     if (array_key_exists($langcode, $languages)) {
       if (!$languages[$langcode]->enabled) {
-        // disable the default english
+        // Disable the default english.
+        // FIXME find the D8 equivalent: this is D7 logic.
         db_update('languages')
           ->condition('language', $langcode)
           ->fields(array(
@@ -174,6 +175,7 @@ function drush_language_enable() {
           ))
           ->execute();
 
+        // FIXME probably needs a more generic invalidation.
         // Changing the language settings impacts the interface.
         cache_clear_all('*', 'cache_page', TRUE);
         drush_log(dt("Enabled language : !language ", array('!language' => $langcode)), 'ok');
