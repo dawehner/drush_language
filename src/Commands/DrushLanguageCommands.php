@@ -395,95 +395,82 @@ class DrushLanguageCommands extends DrushCommands {
   }
 
   /**
-   * Export string of a language as a .po file.
+   * Export strings of a language as a .po file.
    *
    * @param string $langcode
    *   The langcode of the language to exported.
    * @param string $poFile
    *   Path to a .po file. Use "-" or /dev/stdin to use standard output.
-   * @param array $options
-   *   Export options.
    *
    * @command language:export:translations
    *
    * @option status The statuses to export, defaults to 'customized'.
-   * This can be a comma-separated list of 'customized', 'not-customized',
+   *   This can be a comma-separated list of 'customized', 'not-customized',
    *   'not-translated', or 'all'.
+   *
    * @usage Export the french translation
    *   drush langexp fr fr.po
+   *
    * @aliases langexp,language-export,language-export-translations
    *
    * @todo Implement \Drupal\locale\Form\ExportForm::buildForm
    * @todo This can be simplified once https://www.drupal.org/node/2631584
    *   lands
    *   in Drupal core.
+   *
+   * @throws \Exception
+   *   Invalid values passed.
    */
   public function exportTranslations(
-    $langcode,
-    $poFile,
+    string $langcode,
+    string $poFile,
     array $options = ['status' => NULL]
   ) {
-    $args = func_get_args();
-    if (count($args) < 2) {
-      drush_set_error(dt('Usage: drush language-export <langcode> <path_to/file.po>'));
-      return;
-    }
-
-    // Get arguments and options.
-    $langcode = array_shift($args);
-    $file_path_arg = array_shift($args);
-
-    // Ensure the langcode match an existing language.
+    // Ensure the langcode matches an existing language.
     $language = $this->languageManager->getLanguage($langcode);
-    if ($language == NULL) {
-      drush_set_error(dt('drush language-export: no such language'));
-      return;
+    if (empty($language)) {
+      throw new \Exception('drush language-export: no such language');
     }
 
     // Validate export statuses.
-    $export_statuses_allowed = [
+    $exportStatusesAllowed = [
       // Internal-value => input-value.
       'customized' => 'customized',
       'not_customized' => 'not-customized',
       'not_translated' => 'not-translated',
     ];
-    $export_statuses_input = drush_get_option_list('status', 'customized');
-    $export_statuses_input = array_values($export_statuses_input);
-    if ($export_statuses_input == ['all']) {
-      $export_statuses_input = $export_statuses_allowed;
+    $exportStatusesInput = isset($options['status']) ? $options['status'] : ['customized'];
+    $exportStatusesInput = array_values($exportStatusesInput);
+    if ($exportStatusesInput == ['all']) {
+      $exportStatusesInput = $exportStatusesAllowed;
     }
-    $export_statuses_unknown = array_diff($export_statuses_input,
-      $export_statuses_allowed);
-    if ($export_statuses_unknown) {
-      $t_args = ['@options' => implode(', ', $export_statuses_unknown)];
-      return drush_set_error(dt('drush language-export: Unknown status options: @options',
-        $t_args));
+
+    $exportStatusesUnknown = array_diff($exportStatusesInput, $exportStatusesAllowed);
+    if ($exportStatusesUnknown) {
+      $statusArgs = ['options' => implode(', ', $exportStatusesUnknown)];
+      throw new \Exception($this->t('drush language-export: Unknown status options: {options}',
+        $statusArgs));
     }
-    $export_statuses_filtered = array_intersect($export_statuses_allowed,
-      $export_statuses_input);
-    $export_statuses = array_fill_keys(array_keys($export_statuses_filtered),
-      TRUE);
+
+    $exportStatusesFiltered = array_intersect($exportStatusesAllowed, $exportStatusesInput);
+    $exportStatuses = array_fill_keys(array_keys($exportStatusesFiltered), TRUE);
 
     // Relative path should be relative to cwd(), rather than Drupal root-dir.
-    if (drush_is_absolute_path($file_path_arg)) {
-      $file_path = $file_path_arg;
-    }
-    else {
-      $file_path = drush_get_context('DRUSH_DRUPAL_ROOT') . DIRECTORY_SEPARATOR . $file_path_arg;
-    }
+    $filePath = drush_is_absolute_path($poFile)
+      ? $poFile
+      : drush_get_context('DRUSH_DRUPAL_ROOT') . DIRECTORY_SEPARATOR . $poFile;
 
     // Check if file_path exists and is writable.
-    $dir = dirname($file_path);
+    $dir = dirname($filePath);
     if (!file_prepare_directory($dir)) {
-      file_prepare_directory($dir,
-        FILE_MODIFY_PERMISSIONS | FILE_CREATE_DIRECTORY);
+      file_prepare_directory($dir, FILE_MODIFY_PERMISSIONS | FILE_CREATE_DIRECTORY);
     }
 
     $reader = new PoDatabaseReader();
     $language_name = '';
     if ($language != NULL) {
       $reader->setLangcode($language->getId());
-      $reader->setOptions($export_statuses);
+      $reader->setOptions($exportStatuses);
       $languages = $this->languageManager->getLanguages();
       $language_name = isset($languages[$language->getId()]) ? $languages[$language->getId()]->getName() : '';
     }
@@ -494,7 +481,7 @@ class DrushLanguageCommands extends DrushCommands {
       $header->setLanguageName($language_name);
 
       $writer = new PoStreamWriter();
-      $writer->setUri($file_path);
+      $writer->setUri($filePath);
       $writer->setHeader($header);
 
       $writer->open();
@@ -502,10 +489,10 @@ class DrushLanguageCommands extends DrushCommands {
       $writer->writeItems($reader);
       $writer->close();
 
-      drush_log('Export complete.', 'success');
+      $this->logger()->info('Export complete.');
     }
     else {
-      drush_set_error(dt('Nothing to export.'));
+      throw new \Exception($this->t('Nothing to export.'));
     }
   }
 
