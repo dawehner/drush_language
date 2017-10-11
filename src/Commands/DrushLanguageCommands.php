@@ -235,7 +235,7 @@ class DrushLanguageCommands extends DrushCommands {
 
       // Skip locked languages.
       if ($languages[$langcode]->isLocked()) {
-        $this->logger()->warning('No disabling lock specified language {langcode}', $messageArgs);
+        $this->logger()->warning('Not disabling locked specified language {langcode}', $messageArgs);
         continue;
       }
 
@@ -268,22 +268,21 @@ class DrushLanguageCommands extends DrushCommands {
    *
    * @command language:default
    *
-   * @aliases langdef,language-default
+   * @aliases langdef, language-default
    */
   public function languageDefault($langcode) {
+    $messageArgs = ['langcode' => $langcode];
     $languages = $this->languageManager->getLanguages();
     if (!isset($languages[$langcode])) {
-      $this->logger()->warning('Specified language does not exist {langcode}', [
-        'langcode' => $langcode,
-      ]);
+      $this->logger()->warning('Specified language does not exist {langcode}', $messageArgs);
+      return;
     }
 
+    /** @var \Drupal\language\ConfigurableLanguageInterface $default_language */
     $default_language = ConfigurableLanguage::load($langcode);
-    $default_language->set('default', TRUE);
-    $default_language->save();
-    $this->logger()->info('{langcode} assigned as default', [
-      'langcode' => $langcode,
-    ]);
+    $default_language->set('default', TRUE)
+      ->save();
+    $this->logger()->info('{langcode} assigned as default', $messageArgs);
   }
 
   /**
