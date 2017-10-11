@@ -3,6 +3,7 @@
 namespace Drush\Commands;
 
 use Drupal\Component\Gettext\PoStreamWriter;
+use Drupal\Core\Cache\CacheBackendInterface;
 use Drupal\Core\Config\ConfigFactory;
 use Drupal\Core\Entity\EntityTypeManagerInterface;
 use Drupal\Core\Extension\ModuleHandlerInterface;
@@ -17,6 +18,13 @@ use Drush\Utils\StringUtils;
  * Implements the Drush language commands.
  */
 class DrushLanguageCommands extends DrushCommands {
+
+  /**
+   * The cache.page bin.
+   *
+   * @var \Drupal\Core\Cache\CacheBackendInterface
+   */
+  protected $cachePage;
 
   /**
    * The config.factory service.
@@ -56,6 +64,8 @@ class DrushLanguageCommands extends DrushCommands {
   /**
    * DrushLanguageCommands constructor.
    *
+   * @param \Drupal\Core\Cache\CacheBackendInterface $cachePage
+   *   The cache.page bin.
    * @param \Drupal\Core\Config\ConfigFactory $configFactory
    *   The config.factory service.
    * @param \Drupal\Core\Locale\CountryManagerInterface $countryManager
@@ -68,12 +78,14 @@ class DrushLanguageCommands extends DrushCommands {
    *   The module_handler service.
    */
   public function __construct(
+    CacheBackendInterface $cachePage,
     ConfigFactory $configFactory,
     CountryManagerInterface $countryManager,
     EntityTypeManagerInterface $entityTypeManager,
     ConfigurableLanguageManagerInterface $languageManager,
     ModuleHandlerInterface $moduleHandler
   ) {
+    $this->cachePage = $cachePage;
     $this->configFactory = $configFactory;
     $this->countryManager = $countryManager;
     $this->entityTypeManager = $entityTypeManager;
@@ -178,7 +190,6 @@ class DrushLanguageCommands extends DrushCommands {
       }
 
       // FIXME find the D8 equivalent: this is D7 logic.
-      // Disable the default english.
       db_update('languages')
         ->condition('language', $langcode)
         ->fields([
@@ -188,52 +199,64 @@ class DrushLanguageCommands extends DrushCommands {
 
       // FIXME probably needs a more generic invalidation.
       // Changing the language settings impacts the interface.
-      \Drupal::cache('page')->deleteAll();
-      $this->logger()->info('Enabled language : {langcode}', [
-        'langcode' => $langcode,
-      ]);
+      $this->cachePage->deleteAll();
+      $this->logger()->info('Enabled language : {langcode}', $messageArgs);
     }
   }
 
   /**
-   * Disable an already defined language.
+   * Disable one or more already defined languages.
    *
-   * @param string $langcode
-   *   The langcode of the language which will be disabled.
+   * @param array $langcodes
+   *   The comma-separated langcodes of the languages which will be disabled.
    *
    * @command language:disable
    *
    * @aliases langdis,language-disable
    */
-  public function disable($langcode) {
-    $args = func_get_args();
-    if (count($args) == 0) {
-      drush_set_error(dt('Please provide one or more language codes as arguments.'));
+  public function disable(array $langcodes) {
+    $langcodes = StringUtils::csvToArray($langcodes);
+
+    if (empty($langcodes)) {
+      $this->logger()->error('Please provide one or more comma-separated language codes as arguments.');
       return;
     }
 
-    foreach ($args as $langcode) {
+    foreach ($langcodes as $langcode) {
+      $messageArgs = ['langcode' => $langcode];
+      // In the foreach loop because the list changes on successful iterations.
       $languages = $this->languageManager->getLanguages();
-      if (array_key_exists($langcode, $languages)) {
-        if ($languages[$langcode]->is) {
-          // Disable the default english.
-          db_update('languages')
-            ->condition('language', $langcode)
-            ->fields([
-              'enabled' => 0,
-            ])
-            ->execute();
 
-          // Changing the language settings impacts the interface.
-          cache_clear_all('*', 'cache_page', TRUE);
-          drush_log(dt("Disabled language : {langcode} ",
-            ['langcode' => $langcode]), 'ok');
-        }
-        else {
-          drush_print(dt("Language already disabled: {langcode} ",
-            ['langcode' => $langcode]), 'warning');
-        }
+      // Skip nonexistent languages.
+      if (!isset($languages[$langcode])) {
+        $this->logger()->warning('Specified language does not exist {langcode}', $messageArgs);
+        continue;
       }
+
+      // Skip locked languages.
+      if ($languages[$langcode]->isLocked()) {
+        $this->logger()->warning('No disabling lock specified language {langcode}', $messageArgs);
+        continue;
+      }
+
+      // Skip already-disabled languages.
+      if (!$languages[$langcode]->enabled) {
+        $this->logger()->warning('Language already disabled: {langcode}', $messageArgs);
+        continue;
+      }
+
+      // FIXME find the D8 equivalent: this is D7 logic.
+      db_update('languages')
+        ->condition('language', $langcode)
+        ->fields([
+          'enabled' => 0,
+        ])
+        ->execute();
+
+      // FIXME probably needs a more generic invalidation.
+      // Changing the language settings impacts the interface.
+      $this->cachePage->deleteAll();
+      $this->logger()->info('Disabled language : {langcode}', $messageArgs);
     }
   }
 

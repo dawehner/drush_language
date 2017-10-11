@@ -2,6 +2,7 @@ services:
   drush_language.commands:
     class: \Drush\Commands\DrushLanguageCommands
     arguments:
+      - '@cache.page'
       - '@config.factory'
       - '@country_manager'
       - '@entity_type.manager'
