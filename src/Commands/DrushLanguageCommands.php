@@ -499,13 +499,12 @@ class DrushLanguageCommands extends DrushCommands {
   /**
    * Export all translations to files.
    *
-   * @param array $options
-   *   Export options.
+   * @param string $langcodes
+   *   A comma-separated list of the language codes to export. Defaults to all
+   *   enabled languages.
    *
    * @command language:export:all:translations
    *
-   * @option langcodes The language codes to export. Defaults to all enabled
-   *   languages.
    * @option file-pattern The target file pattern. Defaults to
    *   'translations/custom/%language.po'. Note that this is the only place
    *   where this module's auto-importing works.
@@ -515,32 +514,42 @@ class DrushLanguageCommands extends DrushCommands {
    * @aliases langexpall,language-export-all,language-export-all-translations
    */
   public function exportAllTranslations(
+    string $langcodes = NULL,
     array $options = [
-      'langcodes' => NULL,
-      'file-pattern' => NULL,
       'all' => NULL,
+      'file-pattern' => NULL,
     ]
   ) {
-    $langcodes = drush_get_option_list('langcodes');
-    if (!$langcodes) {
+    $langcodes = StringUtils::csvToArray((array) $langcodes);
+
+    if (empty($langcodes)) {
       $languages = $this->languageManager->getLanguages();
       $langcodes = array_keys($languages);
     }
-    $file_pattern = drush_get_option('file_pattern',
-      'translations/custom/%language.po');
-    $options = ['status' => drush_get_option('all') ? 'all' : 'customized'];
+
+    $file_pattern = isset($options['file_pattern'])
+      ? $options['file_pattern']
+      : 'translations/custom/%language.po';
+
+    $exportOptions = [
+      'status' => empty($options['all']) ? ['customized'] : ['all'],
+    ];
+
     foreach ($langcodes as $langcode) {
-      $file_path_relative = preg_replace('/%language/u', $langcode,
-        $file_pattern);
-      $file_name_absolute = drush_is_absolute_path($file_path_relative) ?
-        $file_path_relative : drush_get_context('DRUSH_DRUPAL_ROOT') . '/' . $file_path_relative;
-      drush_invoke_process('@self', 'language-export', [
+      $filePathRelative = preg_replace('/%language/u', $langcode, $file_pattern);
+      $fileNameAbsolute = drush_is_absolute_path($filePathRelative)
+        ? $filePathRelative
+        : drush_get_context('DRUSH_DRUPAL_ROOT') . '/' . $filePathRelative;
+
+      drush_invoke_process('@self', 'language:export:translation', [
         $langcode,
-        $file_name_absolute,
-      ], $options);
-      $t_args = ['langcode' => $langcode, '!file' => $file_path_relative];
-      drush_log(dt('Exported translations for language {langcode} to file !file.',
-        $t_args), 'ok');
+        $fileNameAbsolute,
+      ], $exportOptions);
+
+      $this->logger()->info('Exported translations for language {langcode} to file !file.', [
+        'langcode' => $langcode,
+        '!file' => $filePathRelative,
+      ]);
     }
   }
 
