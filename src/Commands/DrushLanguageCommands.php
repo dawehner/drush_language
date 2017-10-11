@@ -334,10 +334,11 @@ class DrushLanguageCommands extends DrushCommands {
     }
 
     $this->moduleHandler->loadInclude('locale', 'bulk.inc');
+    $replace = isset($options['replace']) ? $options['replace'] : FALSE;
     $buildOptions = array_merge(_locale_translation_default_update_options(), [
       'langcode' => $langcode,
-      'customized' => LOCALE_CUSTOMIZED,
-      'overwrite_options' => $options['replace']
+      'customized' => $replace ? LOCALE_CUSTOMIZED : LOCALE_NOT_CUSTOMIZED,
+      'overwrite_options' => $replace
       ? ['customized' => 1, 'not_customized' => 1]
       : ['customized' => 0, 'not_customized' => 1],
     ]);
