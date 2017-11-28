@@ -1,5 +1,7 @@
-name: Language drush
-type: module
 core: 8.x
 dependencies:
   - language
+description: 'Provides Drush commands for language manipulation'
+name: 'Drush Language commands'
+package: Multilingual
+type: module
